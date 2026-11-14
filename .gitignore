@@ -138,3 +138,16 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# ===== Video 4K Noel: file build / dau ra (qua lon cho GitHub) =====
+build_tmp/
+dist/
+release/
+installer/
+installer.zip
+Video 4K Noel/
+outputs/
+build_log.txt
+*.engine
+app_log*.txt
+ffmpeg_log*.txt
