@@ -472,7 +472,42 @@ def preview(path_text, model_name, res, tile, fast):
     return (before, out), msg
 
 
-def process(path_text, model_name, res, codec, cq, test_seconds, tile, fast):
+SETTINGS = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Video4KNoel" / "settings.json"
+
+
+def load_out_dir():
+    """Thu muc luu da chon lan truoc (neu con ton tai), khong thi dung mac dinh Videos\\Video 4K."""
+    try:
+        d = json.loads(SETTINGS.read_text(encoding="utf-8")).get("out_dir", "")
+        if d and os.path.isdir(d):
+            return d
+    except Exception:
+        pass
+    return str(OUT_DIR)
+
+
+def save_out_dir(d):
+    try:
+        SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS.write_text(json.dumps({"out_dir": d}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def resolve_out_dir(text):
+    d = Path((text or "").strip().strip('"') or OUT_DIR)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise gr.Error(f"Không tạo được thư mục lưu: {d}")
+    if not os.access(d, os.W_OK):
+        raise gr.Error(f"Không có quyền ghi vào thư mục: {d} – hãy chọn thư mục khác.")
+    save_out_dir(str(d))
+    return d
+
+
+def process(path_text, model_name, res, codec, cq, test_seconds, tile, fast, out_dir_text=""):
+    out_dir = resolve_out_dir(out_dir_text)
     src = resolve_src(path_text)
     info = probe(src)
     tw, th = target_size(info["w"], info["h"], res)
@@ -481,10 +516,10 @@ def process(path_text, model_name, res, codec, cq, test_seconds, tile, fast):
     total = info["frames"] if not test else min(info["frames"], int(test_seconds * info["fps"]))
     stem = Path(src).stem
     tag = {3840: "4K", 2160: "4K", 2560: "2K", 1440: "2K"}.get(max(tw, th), f"{th}p")
-    out_path = OUT_DIR / f"{stem}_{tag}{'_test' if test else ''}.mp4"
+    out_path = out_dir / f"{stem}_{tag}{'_test' if test else ''}.mp4"
     n = 1
     while out_path.exists():
-        out_path = OUT_DIR / f"{stem}_{tag}{'_test' if test else ''}_{n}.mp4"
+        out_path = out_dir / f"{stem}_{tag}{'_test' if test else ''}_{n}.mp4"
         n += 1
 
     # TensorRT (nhanh ~2.3 lan, ket qua nhu PyTorch) - lan dau voi moi do phan giai can ~1 phut de toi uu
@@ -637,6 +672,22 @@ def pick_file(current):
     return res[0] if res else current
 
 
+def pick_folder(current):
+    """Hop thoai chon thu muc luu video ket qua."""
+    if WINDOW is None:
+        gr.Info("Đang chạy bằng trình duyệt: hãy dán đường dẫn thư mục vào ô 'Lưu vào'.")
+        return current
+    import webview
+
+    start = current if current and os.path.isdir(current) else str(OUT_DIR)
+    res = WINDOW.create_file_dialog(webview.FileDialog.FOLDER, directory=start)
+    if not res:
+        return current
+    d = res[0] if isinstance(res, (list, tuple)) else res
+    save_out_dir(d)
+    return d
+
+
 def video_info(path_text):
     src = (path_text or "").strip().strip('"')
     if not src:
@@ -653,12 +704,13 @@ def video_info(path_text):
             f"Bấm **🔍 Xem thử** để so sánh chất lượng và ước tính thời gian xử lý.")
 
 
-def open_folder(path):
-    p = Path(path) if path else OUT_DIR
-    if p.is_file():
+def open_folder(path, out_dir_text=""):
+    p = Path(path) if path else None
+    if p and p.is_file():
         subprocess.Popen(["explorer", "/select,", str(p)])
-    else:
-        os.startfile(OUT_DIR)
+        return
+    d = Path((out_dir_text or "").strip().strip('"') or OUT_DIR)
+    os.startfile(d if d.is_dir() else OUT_DIR)
 
 
 # ----------------------------------------------------------------------------- giao dien
@@ -681,7 +733,7 @@ with gr.Blocks(title=APP_TITLE) as demo:
         gpu_html = ('<span class="warn">⚠️ Không thấy GPU NVIDIA (hoặc driver cũ) – app sẽ chạy bằng CPU, rất chậm. '
                     'Hãy cập nhật driver NVIDIA mới nhất.</span>')
     gr.HTML(f'<h1><span class="bell">🔔</span> Video → 4K Noel <span class="bell r">🔔</span></h1>'
-            f'<div class="sub">{gpu_html} · 📁 Kết quả lưu ở <b>{OUT_DIR}</b></div>', elem_id="xmas-header")
+            f'<div class="sub">{gpu_html}</div>', elem_id="xmas-header")
     with gr.Row(equal_height=True):
         # Hang 1: cot trai = dau vao & cai dat | cot phai = khung so sanh (cao bang cot trai)
         with gr.Column(scale=4, min_width=380, elem_classes="xmas-panel"):
@@ -693,6 +745,10 @@ with gr.Blocks(title=APP_TITLE) as demo:
                 path_text = gr.Textbox(label="🎞️ Video nguồn", placeholder=r"D:\Videos\clip.mp4",
                                        max_lines=1, scale=5, elem_id="xmas-path")
                 pick_btn = gr.Button("📂 Chọn video", scale=2, min_width=150, elem_id="xmas-pick")
+            with gr.Row(equal_height=True):
+                out_dir = gr.Textbox(value=load_out_dir, label="💾 Lưu video kết quả vào", max_lines=1,
+                                     scale=5, elem_id="xmas-outdir")
+                outdir_btn = gr.Button("📁 Chọn nơi lưu", scale=2, min_width=150, elem_id="xmas-pick-out")
             model = gr.Dropdown(list(MODELS), value=list(MODELS)[0], label="🤖 Mô hình",
                                 info="Video quay thật → Đa dụng · Hoạt hình → Anime")
             res = gr.Radio(list(RES_PRESETS), value=list(RES_PRESETS)[0], label="📺 Độ phân giải đầu ra",
@@ -712,7 +768,7 @@ with gr.Blocks(title=APP_TITLE) as demo:
                                  elem_id="xmas-status", container=True)
             with gr.Row(equal_height=True):
                 out_file = gr.Textbox(label="📦 File kết quả", interactive=False, max_lines=1, scale=3)
-                gr.Button("📂 Mở thư mục", size="md", scale=1, elem_id="xmas-open").click(open_folder, out_file)
+                gr.Button("📂 Mở thư mục", size="md", scale=1, elem_id="xmas-open").click(open_folder, [out_file, out_dir])
     # Hang 2: thanh nut bam ngang toan bo chieu rong
     with gr.Row(elem_classes="xmas-panel xmas-actions", equal_height=True):
         btn_prev = gr.Button("🔍 Xem thử 1 khung hình", scale=2, size="lg")
@@ -720,9 +776,10 @@ with gr.Blocks(title=APP_TITLE) as demo:
         btn_stop = gr.Button("⏹ Dừng", variant="stop", scale=1, size="lg")
 
     pick_btn.click(pick_file, path_text, path_text)
+    outdir_btn.click(pick_folder, out_dir, out_dir)
     path_text.change(video_info, path_text, status)
     btn_prev.click(preview, [path_text, model, res, tile, fast], [slider, status])
-    job = btn_run.click(process, [path_text, model, res, codec, cq, test_s, tile, fast], [status, out_file])
+    job = btn_run.click(process, [path_text, model, res, codec, cq, test_s, tile, fast, out_dir], [status, out_file])
     btn_stop.click(lambda: "⏹ Đã dừng.", None, status, cancels=[job])
 
 def _shutdown():

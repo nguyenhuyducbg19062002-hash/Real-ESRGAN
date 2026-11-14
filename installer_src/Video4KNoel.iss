@@ -2,7 +2,7 @@
 ; Build: ISCC.exe installer_src\Video4KNoel.iss   (sau khi da chay PyInstaller ra release\Video4KNoel)
 
 #define AppName "Video 4K Noel"
-#define AppVersion "1.1.0"
+#define AppVersion "1.2.0"
 #define AppExe "Video4KNoel.exe"
 
 [Setup]

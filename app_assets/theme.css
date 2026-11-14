@@ -140,7 +140,7 @@ button:hover { filter: brightness(1.08); transform: translateY(-1px); }
 }
 #xmas-drop .drop-ico { font-size: 44px; animation: hop 1.6s ease-in-out infinite; }
 #xmas-drop span { color: #6b4b4b; font-size: 13px; }
-#xmas-pick { align-self: stretch; min-height: 100%; font-weight: 800 !important; }
+#xmas-pick, #xmas-pick-out { align-self: stretch; min-height: 100%; font-weight: 800 !important; }
 #drop-overlay {
   position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center;
   background: rgba(120, 0, 15, 0.55); backdrop-filter: blur(3px); pointer-events: none;
@@ -153,7 +153,7 @@ button:hover { filter: brightness(1.08); transform: translateY(-1px); }
 body.dragging #drop-overlay { display: flex; }
 #xmas-drop .drop-row { display: flex; align-items: center; gap: 14px; }
 #xmas-drop .drop-ico { font-size: 38px; line-height: 1; }
-#xmas-pick { white-space: nowrap; }
+#xmas-pick, #xmas-pick-out { white-space: nowrap; }
 
 /* Dang xu ly video: dung moi chuyen dong & lam mo kinh de GPU chi lo cho AI */
 .xmas-busy *, .xmas-busy *::before, .xmas-busy *::after { animation-play-state: paused !important; transition: none !important; }
